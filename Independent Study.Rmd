@@ -1,0 +1,467 @@
+---
+title: "Independent Study"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r}
+#loading Libraries
+library(readxl)
+library(openxlsx)
+library(tidyr)
+library(stringr)
+library(tibble)
+library(car)
+library(showtext)
+library(dplyr)
+library(CCP)
+library(readxl)
+library(ggcorrplot)
+library(factoextra)
+library(corrplot)
+library(glmnet)
+library(factoextra)
+library(FactoMineR)
+require(FactoMineR)
+library(ggplot2)
+require(factoextra)
+setwd("/Users/jettadler/Desktop/Data /Study")
+```
+```{r}
+#Defining Data
+rm(list = ls())
+stl_raw <- read_xls('steel_data.xls')
+al_raw <- read_xls('Al_data.xls')
+
+```
+
+```{r}
+#removing blank rows and name/number coulumbs 
+toDelete <- seq(1, 974, 2)
+stl <-  stl_raw[-toDelete, ]
+al <-  al_raw[-toDelete, ]
+stl <- stl[c(-1)]
+al <- al[c(-1)]
+```
+```{r}
+#Seperating Data into Elemental Compositons, Strain, and Crack Length Data
+stEl <- stl[c(1:16)]
+alEl <- al[c(1:13)]
+stSTN <- stl[c(21)]
+stTCL <- stl[c(22)]
+alSTN <- al[c(18)]
+alMCL <- al[c(19)]
+```
+
+
+```{r,fig.width=5,fig.height=5,warning=FALSE}
+#First Visual check of possible correlations between variables
+cors <- cor(stl)
+cora <- cor(al)
+#corrupt(cors, method='number')
+corrplot(cora, method='circle')
+```
+```{r}
+cors
+cora
+```
+
+
+```{r}
+#Plotting variables against each other to get a sense of the datas shape
+plot(al$Mg, al$MCL, xlab = "% Mg", ylab = "MCL")
+```
+
+
+```{r}
+#Plotting variables against each other to get a sense of the datas shape
+
+plot(stl$Ni, stl$Strain , xlab = "% Ni", ylab = "Strain")
+
+```
+
+```{r}
+#Plotting variables against each other to get a sense of the datas shape
+
+plot(stl$Ni, stl$TCL, xlab = "%Ni", ylab = "TCL")
+xlab("%Ni")
+```
+
+```{r}
+#Plotting variables against each other to get a sense of the datas shape
+
+plot(al$Fe, al$MCL)
+```
+
+```{r}
+#Multiple Linear Regression Observing Strain for Steel Dataset
+LMstl = lm(Strain ~ C + Si + Mn + P + S + Cr + Ni + Mo + N + Nb + Co + Cu + Al + Ti + V + B, data = stl)
+summary(LMstl)
+```
+```{r}
+preLMmstl=predict(LMstl)
+plot(stl$Strain, predict(LMstl), xlab = "Strain",
+     ylab = "Predicted Strain", cex.axis = 1.5, 
+     cex.lab = 1.5, cex = 1.5, pch = 19)
+```
+```{r}
+mse_stlMLR_strn <- (sum((stl$Strain - preLMmstl)^2))/487
+
+```
+
+```{r}
+#MLR Analysis for Strain using the Aluminum Dataset 
+LMal = lm(Strain ~  Si + Mn + Fe + Mg + Cr + Mn + Zn + Cu + Al + Ti + V + Zr + B + Li, data = al)
+summary(LMal)
+ggplot(LMal)
+```
+```{r}
+preLMal=predict(LMal)
+plot(al$Strain, predict(LMal), xlab = "Strain",
+     ylab = "Predicted Strain", cex.axis = 1.5, 
+     cex.lab = 1.5, cex = 1.5, pch = 19)
+```
+```{r}
+mse_alMLR_strn <- (sum((al$Strain - preLMal)^2))/195
+
+```
+
+```{r}
+#Using MLR to predict Total Crack Length in the Steel Dataset
+LMstl_C = lm(TCL ~ C + Si + Mn + P + S + Cr + Ni + Mo + N + Nb + Co + Cu + Al + Ti + V + B, data = stl)
+summary(LMstl_C)
+```
+```{r}
+preLMstl_C=predict(LMstl_C)
+plot(stl$TCL, predict(LMstl_C), xlab = "TCL",
+     ylab = "Predicted TCL", cex.axis = 1.5, 
+     cex.lab = 1.5, cex = 1.5, pch = 19)
+```
+```{r}
+mse_stlMLR_TCL <- (sum((stl$TCL - preLMstl_C)^2))/487
+
+```
+
+```{r}
+#Using MLR to predict Maximum crack Length in Aluminum Dataset
+LMal_C = lm(MCL ~  Si + Mn + Fe + Mg + Cr + Mn + Zn + Cu + Al + Ti + V + Zr + B + Li, data = al)
+summary(LMal_C)
+```
+```{r}
+preLMal_C=predict(LMal_C)
+plot(al$MCL, predict(LMal_C), xlab = "MCL",
+     ylab = "Predicted MCL", cex.axis = 1.5, 
+     cex.lab = 1.5, cex = 1.5, pch = 19)
+```
+```{r}
+mse_alMLR_MCL <- (sum((al$MCL - preLMal_C)^2))/195
+sqrt(mse_alMLR_MCL)
+
+```
+
+```{r}
+#Feature Selection and PCA to Predict Strain Values
+#Steel Strain Model
+stEl <- as.matrix(stEl)
+stSTN <- as.matrix(stSTN)
+COMstl <- glmnet(stEl ,stSTN)
+plot(COMstl)
+```
+```{r}
+COMfit_stSTN = cv.glmnet(stEl, stSTN, alpha = 1)
+plot(COMfit_stSTN)
+```
+```{r}
+COMfit_stSTN$lambda.min
+COMfit_stSTN$lambda.1se
+```
+```{r}
+library(plotmo)
+plotres(COMfit_stSTN)
+```
+```{r}
+pred_stl <- predict(COMstl, stEl, s = .02)
+```
+```{r}
+stl_t <- pred_stl[,c("s1")]
+stl_s <- as.numeric(stSTN)
+plot(stl_s,stl_t, xlab="Measured", ylab = "Predicted")
+```
+```{r}
+#Steel TCL Model
+stEl <- as.matrix(stEl)
+stTCL <- as.matrix(stTCL)
+COMstl2 <- glmnet(stEl ,stTCL)
+plot(COMstl2, label = TRUE)
+```
+```{r}
+COMfit_stTCL = cv.glmnet(stEl, stTCL, alpha = 0)
+plot(COMfit_stTCL)
+```
+```{r}
+COMfit_stTCL$lambda.min
+COMfit_stTCL$lambda.1se
+```
+```{r}
+plotres(COMfit_stTCL)
+```
+```{r}
+pred_stl2 <- predict(COMstl2, stEl)
+```
+
+```{r}
+stl_t2 <- pred_stl2[,c("s1")]
+stl_s2 <- as.numeric(stTCL)
+plot(stl_s2,stl_t2, xlab="Measured", ylab = "Predicted")
+```
+```{r}
+alEl <- as.matrix(alEl)
+alMCL <- as.matrix(alMCL)
+COMal <- glmnet(alEl ,alMCL)
+plot(COMal, label= TRUE)
+```
+```{r}
+COMfit_al = cv.glmnet(alEl, alMCL, alpha = 0)
+plot(COMfit_al)
+```
+```{r}
+COMfit_al$lambda.min
+lam.best <- COMfit_al$lambda.1se
+coef(COMfit_al, s=lam.best)
+```
+```{r}
+plotres(COMfit_al)
+```
+```{r}
+pred_al <- predict(COMal, alEl, s = .2)
+```
+
+```{r}
+al_t2 <- pred_al[,c("s1")]
+al_s2 <- as.numeric(alMCL)
+plot(al_s2,al_t2, xlab="Measured", ylab = "Predicted")
+```
+```{r}
+#defining dataframes that can be used for PCA
+alrf_MCL <- al[c(1:13,19)]
+alrf_STN <- al[c(1:13,18)]
+stlrf_TCL <- stl[c(1:16,22)]
+stlrf_STN <- stl[c(1:16,21)]
+```
+
+```{r} 
+#Using PCA to idenifty sources of varience and hopefully insights into model simplifications
+Si <-as.numeric(alrf_MCL$Si)
+Fe <-as.numeric(alrf_MCL$Fe)
+Cu <-as.numeric(alrf_MCL$Cu)
+Mn <-as.numeric(alrf_MCL$Mn)
+Mg <-as.numeric(alrf_MCL$Mg)
+Cr <-as.numeric(alrf_MCL$Cr)
+Zn <-as.numeric(alrf_MCL$Zn)
+Ti <-as.numeric(alrf_MCL$Ti)
+Zr <-as.numeric(alrf_MCL$Zr)
+V <-as.numeric(alrf_MCL$V)
+B <-as.numeric(alrf_MCL$B)
+Li <-as.numeric(alrf_MCL$Li)
+Al <-as.numeric(alrf_MCL$Al)
+MCL <-as.numeric(alrf_MCL$MCL)
+alSTN <- as.numeric(alrf_STN$Strain)
+alQ <-(al[c(16)])
+
+```
+
+```{r}
+#PCA for MCL in Al
+pralT <- cbind(Si,Fe,Cu,Mn,Mg,Cr,Zn,Ti,Zr,V,B,Li,Al,MCL,alSTN)
+```
+
+```{r}
+pralPCA = prcomp(pralT, scale=F)
+
+```
+```{r}
+summary(pralPCA)
+
+```
+
+
+
+
+
+```{r}
+barplot(pralPCA$rotation[,1], main="PC 1 Loadings Plot", las=2)
+```
+```{r}
+biplot(pralPCA)
+
+```
+```{r}
+require(showtext)
+library(FactoMineR)
+require(FactoMineR)
+require(factoextra)
+
+fviz_eig(pralPCA) 
+```
+```{r}
+library(factoextra)
+fviz_eig(pralPCA)
+
+fviz_pca_ind(pralPCA,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_var(pralPCA,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_biplot(pralPCA, repel = TRUE, labels = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+```{r}
+
+```
+
+```{r}
+#MLR using only Al, Mg, Cu while looking at MCL 
+LMal2 = lm(MCL ~ Mg + Cu + Al, data = al)
+summary(LMal2)
+```
+```{r}
+pralstn <- cbind(Si,Fe,Cu,Mn,Mg,Cr,Zn,Ti,Zr,V,B,Li,Al,alSTN)
+pcaalstn = prcomp(pralstn, scale=F)
+fviz_eig(pcaalstn) 
+```
+```{r}
+barplot(pcaalstn$rotation[,1], main="PC 1 Loadings Plot", las=2)
+```
+```{r}
+fviz_eig(pcaalstn)
+
+fviz_pca_ind(pcaalstn,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_var(pcaalstn,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_biplot(pcaalstn, repel = TRUE, labels = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+
+```{r}
+sSi <-as.numeric(stlrf_STN$Si)
+sC <-as.numeric(stlrf_STN$C)
+sCu <-as.numeric(stlrf_STN$Cu)
+sMn <-as.numeric(stlrf_STN$Mn)
+sMo <-as.numeric(stlrf_STN$Mo)
+sCr <-as.numeric(stlrf_STN$Cr)
+sN <-as.numeric(stlrf_STN$N)
+sTi <-as.numeric(stlrf_STN$Ti)
+sP <-as.numeric(stlrf_STN$P)
+sV <-as.numeric(stlrf_STN$V)
+sB <-as.numeric(stlrf_STN$B)
+sNi <-as.numeric(stlrf_STN$Ni)
+sAl <-as.numeric(stlrf_STN$Al)
+sNb <-as.numeric(stlrf_STN$Nb)
+sCo <-as.numeric(stlrf_STN$Co)
+sS <-as.numeric(stlrf_STN$S)
+STN <-as.numeric(stlrf_STN$Strain)
+TCL <- as.numeric(stlrf_TCL$TCL)
+
+```
+
+```{r}
+prasstl <- cbind(sSi,sC,sCu,sMn,sMo,sCr,sN,sTi,sP,sV,sB,sAl,sNb,sCo,sS,STN)
+
+```
+```{r}
+pcasstl = prcomp(prasstl, scale=F)
+
+summary(pcasstl)
+
+```
+```{r}
+barplot(pcasstl$rotation[,1], main="PC 1 Loadings Plot", las=2)
+
+```
+```{r}
+fviz_eig(pcasstl) 
+```
+```{r}
+library(factoextra)
+fviz_eig(pcasstl)
+
+fviz_pca_ind(pcasstl,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_var(pcasstl,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_biplot(pcasstl, repel = TRUE, label = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+```{r}
+prasstl2 <- cbind(sSi,sC,sCu,sMn,sMo,sCr,sN,sTi,sP,sV,sB,sAl,sNb,sCo,sS,TCL)
+
+```
+```{r}
+pcatstl = prcomp(prasstl2, scale=F)
+
+summary(pcatstl)
+```
+```{r}
+barplot(pcatstl$rotation[,2], main="PC 1 Loadings Plot", las=2)
+
+```
+```{r}
+fviz_eig(pcatstl)
+
+fviz_pca_ind(pcatstl,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_var(pcatstl,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+fviz_pca_biplot(pcatstl, repel = TRUE, label = TRUE,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+```
+```{r}
+sqrt(mse_alMLR_MCL)
+sqrt(mse_alMLR_strn)
+sqrt(mse_stlMLR_TCL)
+sqrt(mse_stlMLR_strn)
+
+```
+
